@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Генератор QR-кодов с подписью</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f5f2;
+    --card-bg: #ffffff;
+    --accent: #2f5d50;
+    --accent-hover: #244a40;
+    --text: #1f2421;
+    --muted: #6b7370;
+    --border: #e2ddd6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 16px;
+    display: flex;
+    justify-content: center;
+  }
+  .container {
+    width: 100%;
+    max-width: 480px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    font-weight: 600;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 24px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .field { margin-bottom: 16px; }
+  input[type="text"], select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+  }
+  .row .field { flex: 1; }
+  button {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+  .result-card {
+    display: none;
+    text-align: center;
+  }
+  .result-card.visible { display: block; }
+  #qr-hidden { display: none; }
+  canvas#final-canvas {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .download-btn {
+    background: var(--text);
+  }
+  .download-btn:hover { background: #333; }
+  .hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: -8px;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Генератор QR-кодов</h1>
+  <p class="subtitle">Создайте QR-код с подписью под ним</p>
+
+  <div class="card">
+    <div class="field">
+      <label for="qr-text">Содержимое QR-кода (ссылка или текст)</label>
+      <input type="text" id="qr-text" placeholder="https://example.com" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label for="qr-label">Текст подписи снизу</label>
+      <input type="text" id="qr-label" placeholder="Например: Стол 5" autocomplete="off">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="qr-size">Размер QR</label>
+        <select id="qr-size">
+          <option value="200">200 px</option>
+          <option value="300" selected>300 px</option>
+          <option value="400">400 px</option>
+          <option value="500">500 px</option>
+          <option value="1000">1000 px</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="qr-color">Цвет кода</label>
+        <select id="qr-color">
+          <option value="#000000" selected>Чёрный</option>
+          <option value="#2f5d50">Зелёный</option>
+          <option value="#1e3a8a">Синий</option>
+          <option value="#7c2d12">Коричневый</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="generate-btn">Сгенерировать QR-код</button>
+  </div>
+
+  <div class="card result-card" id="result-card">
+    <canvas id="final-canvas"></canvas>
+    <button class="download-btn" id="download-btn">Скачать как PNG</button>
+  </div>
+
+  <div id="qr-hidden"></div>
+</div>
+
+<script>
+const generateBtn = document.getElementById('generate-btn');
+const downloadBtn = document.getElementById('download-btn');
+const resultCard = document.getElementById('result-card');
+const finalCanvas = document.getElementById('final-canvas');
+const qrHidden = document.getElementById('qr-hidden');
+
+function generateQR() {
+  const text = document.getElementById('qr-text').value.trim();
+  const label = document.getElementById('qr-label').value.trim();
+  const size = parseInt(document.getElementById('qr-size').value, 10);
+  const color = document.getElementById('qr-color').value;
+
+  if (!text) {
+    alert('Введите содержимое QR-кода (ссылку или текст).');
+    return;
+  }
+
+  // очищаем предыдущий QR
+  qrHidden.innerHTML = '';
+
+  new QRCode(qrHidden, {
+    text: text,
+    width: size,
+    height: size,
+    colorDark: color,
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  // qrcodejs рендерит асинхронно чуть погодя — небольшой таймаут для надёжности
+  setTimeout(() => {
+    const qrImg = qrHidden.querySelector('img') || qrHidden.querySelector('canvas');
+    if (!qrImg) return;
+
+    const margin = 16;   // отступ от края канваса до рамки
+    const gap = 14;       // отступ от рамки до содержимого (QR и текста)
+    const labelHeight = label ? Math.round(size * 0.14) + 16 : 0;
+
+    const contentWidth = size;
+    const contentHeight = size + labelHeight;
+
+    const canvasWidth = contentWidth + (margin + gap) * 2;
+    const canvasHeight = contentHeight + (margin + gap) * 2;
+
+    finalCanvas.width = canvasWidth;
+    finalCanvas.height = canvasHeight;
+    const ctx = finalCanvas.getContext('2d');
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    const qrX = margin + gap;
+    const qrY = margin + gap;
+
+    const drawEverything = (imgSource) => {
+      ctx.drawImage(imgSource, qrX, qrY, size, size);
+
+      if (label) {
+        ctx.fillStyle = '#1f2421';
+        const fontSize = Math.max(14, Math.round(size * 0.075));
+        ctx.font = `600 ${fontSize}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, canvasWidth / 2, qrY + size + labelHeight / 2, contentWidth);
+      }
+
+      // рамка по самому краю итогового изображения
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, canvasWidth - 2, canvasHeight - 2);
+
+      resultCard.classList.add('visible');
+    };
+
+    if (qrImg.tagName === 'IMG') {
+      if (qrImg.complete) {
+        drawEverything(qrImg);
+      } else {
+        qrImg.onload = () => drawEverything(qrImg);
+      }
+    } else {
+      drawEverything(qrImg);
+    }
+  }, 150);
+}
+
+function downloadImage() {
+  const link = document.createElement('a');
+  const label = document.getElementById('qr-label').value.trim();
+  link.download = (label ? label.replace(/[^a-zA-Zа-яА-Я0-9]+/g, '_') : 'qr-code') + '.png';
+  link.href = finalCanvas.toDataURL('image/png');
+  link.click();
+}
+
+generateBtn.addEventListener('click', generateQR);
+downloadBtn.addEventListener('click', downloadImage);
+
+document.getElementById('qr-text').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') generateQR();
+});
+document.getElementById('qr-label').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') generateQR();
+});
+</script>
+</body>
+</html>
